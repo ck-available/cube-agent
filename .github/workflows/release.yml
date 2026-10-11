@@ -41,9 +41,16 @@ jobs:
         env:
           TAG_NAME: ${{ github.ref_name }}
 
-      - name: Build macOS dmg
+      # --universal：同时打包 x64 与 arm64 并合并成单一 app。
+      # 不加这个的话，macos-latest（已是 arm64）只会产出 arm64 包，
+      # 而 artifactName 承诺的是 mac-universal，会导致 Intel Mac 拿到跑不起来的包。
+      # 本项目无原生模块（npmRebuild:false），合并是纯 JS 复制，风险很低。
+      - name: Build macOS dmg (universal)
         if: runner.os == 'macOS'
-        run: npx electron-builder --mac dmg --publish never
+        run: npx electron-builder --mac dmg --universal --publish never
+        env:
+          # 未配置证书时跳过签名身份探测，避免构建被签名流程拖慢或中断
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
       - name: Build Linux AppImage
         if: runner.os == 'Linux'
