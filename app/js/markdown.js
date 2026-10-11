@@ -19,8 +19,8 @@
     "func|go|chan|defer|select|map|make|range|" +
     "SELECT|FROM|WHERE|INSERT|UPDATE|DELETE|JOIN|LEFT|RIGHT|INNER|OUTER|GROUP|BY|ORDER|HAVING|LIMIT|CREATE|TABLE|DROP|ALTER|INDEX|VALUES|INTO|SET|AND|OR|NOT|NULL)\\b";
 
-  function highlightCode(escaped, lang) {
-    // 先保护字符串和注释，再做关键字替换
+  /* 对一段已转义的代码做高亮。store 只在单次调用内有效。 */
+  function highlightOnce(escaped) {
     var store = [];
     function stash(html) {
       store.push(html);
@@ -54,6 +54,18 @@
     out = out.replace(/\u0001(\d+)\u0001/g, function (_, i) {
       return store[+i];
     });
+    return out;
+  }
+
+  /* 逐行高亮：每行包一层 .code-line，行号由 CSS counter 生成。
+     必须按行切分后再高亮 —— 否则块注释 / 多行字符串的 span 会跨行闭合，
+     把两个 <span> 交错成非法 HTML，浏览器会吞掉标记导致代码显示错乱。 */
+  function highlightCode(escaped, lang) {
+    var lines = escaped.split("\n");
+    var out = "";
+    for (var i = 0; i < lines.length; i++) {
+      out += '<span class="code-line">' + highlightOnce(lines[i]) + "</span>";
+    }
     return out;
   }
 
@@ -139,9 +151,17 @@
         flushParagraph(); flushList(); flushQuote();
         var cb = codeBlocks[+cbMatch[1]];
         var escaped = escapeHtml(cb.code);
+        /* 代码块头：文件名（可选）+ 语言 + 复制。
+           行号由 CSS counter 在 ::before 里生成，不污染 DOM，
+           这样复制拿到的仍是 data-code 里的纯原文。 */
+        var fileName = cb.file ? String(cb.file).split(/[\\/]/).pop() : "";
+        var head = fileName
+          ? '<span class="code-file">' + escapeHtml(fileName) + "</span>" +
+            '<span class="code-lang">' + cb.lang + "</span>"
+          : '<span class="code-lang">' + cb.lang + "</span>";
         html +=
-          '<div class="code-block"><div class="code-head"><span>' + cb.lang +
-          '</span><button class="code-copy" data-code="' + encodeURIComponent(cb.code) + '">复制</button></div>' +
+          '<div class="code-block"><div class="code-head">' + head +
+          '<button class="code-copy" data-code="' + encodeURIComponent(cb.code) + '">复制</button></div>' +
           "<pre><code>" + highlightCode(escaped, cb.lang) + "</code></pre></div>";
         i++;
         continue;

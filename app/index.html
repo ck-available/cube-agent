@@ -56,11 +56,10 @@
     <div class="brand">
       <span class="brand-logo"><svg class="ic"><use href="#i-cube"></use></svg></span>
       <span class="brand-name">CubeAgent</span>
-      <span class="brand-badge">Agent</span>
     </div>
 
-    <button id="btn-new-task" class="btn-primary btn-block">
-      <svg class="ic"><use href="#i-plus"></use></svg>新任务
+    <button id="btn-new-task" class="btn-outline btn-block">
+      <svg class="ic ic-sm"><use href="#i-plus"></use></svg>新任务
       <kbd class="btn-kbd">Ctrl N</kbd>
     </button>
 
@@ -70,13 +69,13 @@
         <kbd class="side-kbd">Ctrl K</kbd>
       </button>
       <button id="nav-skills" class="side-action">
-        <svg class="ic ic-sm"><use href="#i-mask"></use></svg>技能与助手
+        <svg class="ic ic-sm"><use href="#i-mask"></use></svg>技能
       </button>
       <button id="nav-mcp" class="side-action">
-        <svg class="ic ic-sm"><use href="#i-plug"></use></svg>MCP 连接器
+        <svg class="ic ic-sm"><use href="#i-plug"></use></svg>连接器
       </button>
       <button id="nav-git" class="side-action">
-        <svg class="ic ic-sm"><use href="#i-branch"></use></svg>版本与变更
+        <svg class="ic ic-sm"><use href="#i-branch"></use></svg>版本
       </button>
     </nav>
 
@@ -99,14 +98,14 @@
     <nav id="session-list"></nav>
 
     <div class="sidebar-footer">
-      <button id="btn-masks" class="btn-ghost">
-        <svg class="ic ic-sm"><use href="#i-mask"></use></svg>面具
+      <button id="btn-masks" class="btn-ghost" title="助手面具">
+        <svg class="ic ic-sm"><use href="#i-mask"></use></svg>
       </button>
-      <button id="btn-theme" class="btn-ghost">
-        <svg class="ic ic-sm"><use href="#i-sun"></use></svg>主题
+      <button id="btn-theme" class="btn-ghost" title="切换主题">
+        <svg class="ic ic-sm"><use href="#i-sun"></use></svg>
       </button>
-      <button id="btn-settings" class="btn-ghost">
-        <svg class="ic ic-sm"><use href="#i-settings"></use></svg>设置
+      <button id="btn-settings" class="btn-ghost" title="设置">
+        <svg class="ic ic-sm"><use href="#i-settings"></use></svg>
       </button>
     </div>
   </aside>
@@ -123,15 +122,19 @@
           <span id="current-model-label">选择模型</span>
           <svg class="ic ic-sm"><use href="#i-chevron"></use></svg>
         </button>
-        <select id="mode-select" class="select-sm" title="运行模式">
-          <option value="chat">聊天模式</option>
-          <option value="agent">Agent 模式</option>
-        </select>
-        <select id="perm-select" class="select-sm" title="权限档位（借鉴 Codex approval-policy）">
-          <option value="suggest">建议模式</option>
-          <option value="auto">自动模式</option>
-          <option value="full">全自动</option>
-        </select>
+        <div class="select-wrap" title="运行模式">
+          <select id="mode-select" class="select-sm">
+            <option value="chat">聊天模式</option>
+            <option value="agent">Agent 模式</option>
+          </select>
+        </div>
+        <div class="select-wrap" title="权限档位（借鉴 Codex approval-policy）">
+          <select id="perm-select" class="select-sm">
+            <option value="suggest">建议模式</option>
+            <option value="auto">自动模式</option>
+            <option value="full">全自动</option>
+          </select>
+        </div>
         <button id="btn-panel" class="btn-icon" title="显示/隐藏详情面板">
           <svg class="ic ic-lg"><use href="#i-panel"></use></svg>
         </button>
@@ -175,12 +178,14 @@
       <div id="command-popup" class="command-popup hidden"></div>
       <div class="composer-inner">
         <textarea id="input" placeholder="描述任务，例如：给 user.service.ts 补单元测试并跑通 npm test"></textarea>
-        <button id="btn-stop" class="btn-danger hidden">
-          <svg class="ic ic-sm"><use href="#i-stop"></use></svg>停止
-        </button>
-        <button id="btn-send" class="btn-primary">
-          <svg class="ic ic-sm"><use href="#i-play"></use></svg>发送
-        </button>
+        <div class="composer-btns">
+          <button id="btn-stop" class="btn-stop hidden" title="停止本轮">
+            <svg class="ic ic-sm"><use href="#i-stop"></use></svg><span>停止</span>
+          </button>
+          <button id="btn-send" class="btn-send" title="发送 (Enter)">
+            <svg class="ic ic-sm"><use href="#i-play"></use></svg><span>发送</span>
+          </button>
+        </div>
       </div>
       <div class="composer-meta">
         <span id="meta-hint">Enter 发送 · Shift+Enter 换行 · @ 引用文件 · / 斜杠命令 · /context 看用量</span>

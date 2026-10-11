@@ -472,6 +472,7 @@
     av.appendChild(icon("bot"));
     row.appendChild(av);
     var body = el("div", "msg-body");
+    body.appendChild(el("span", "msg-role", "Assistant"));
     if (m.reasoning) {
       var det = el("details", "msg-reasoning");
       det.appendChild(el("summary", null, "思考过程"));
@@ -514,6 +515,7 @@
     uav.appendChild(icon("user"));
     row.appendChild(uav);
     var body = el("div", "msg-body");
+    body.appendChild(el("span", "msg-role", "You"));
     var content = el("div", "msg-content");
     // 用户消息是纯文本原样展示（模型回复才走 Markdown 渲染）
     content.textContent = m.content;
@@ -739,11 +741,20 @@
     var limit = Math.min(lines.length, 260);
     for (var i = 0; i < limit; i++) {
       var ln = lines[i];
-      var row = el("div", "diff-line " + (ln.type === "+" ? "add" : ln.type === "-" ? "del" : ""));
-      row.textContent = ln.type + " " + ln.text;
+      var kind = ln.type === "+" ? "add" : ln.type === "-" ? "del" : "";
+      var row = el("div", "diff-line " + kind);
+      /* +/- 号放进独立 gutter，而不是拼进行首。
+         拼进行首会导致所有行的代码左边界随符号宽度抖动，完全对不齐。 */
+      row.appendChild(el("span", "diff-gut", ln.type));
+      row.appendChild(el("span", "diff-txt", ln.text));
       body.appendChild(row);
     }
-    if (lines.length > limit) body.appendChild(el("div", "diff-line", "…（共 " + lines.length + " 行变更，已折叠）"));
+    if (lines.length > limit) {
+      var more = el("div", "diff-line");
+      more.appendChild(el("span", "diff-gut", " "));
+      more.appendChild(el("span", "diff-txt", "…（共 " + lines.length + " 行变更，已折叠）"));
+      body.appendChild(more);
+    }
     card.appendChild(body);
     return card;
   }
@@ -804,6 +815,7 @@
     sav.appendChild(icon("bot"));
     row.appendChild(sav);
     var body = el("div", "msg-body");
+    body.appendChild(el("span", "msg-role", "Assistant"));
     var reasoningEl = null;
     var content = el("div", "msg-content typing-cursor");
     body.appendChild(content);
@@ -821,8 +833,9 @@
       turn.pending = false;
       if (turn.reasoning) {
         if (!turn.reasoningEl) {
+          /* 默认折叠：Claude Code / Codex 都是折叠一行"思考过程"。
+             流式期间自动展开会在消息流里堆一大段灰色文字，视觉噪声极大。 */
           turn.reasoningEl = el("details", "msg-reasoning");
-          turn.reasoningEl.open = true;
           turn.reasoningEl.appendChild(el("summary", null, "思考过程"));
           turn.reasoningEl.appendChild(el("div"));
           turn.body.insertBefore(turn.reasoningEl, turn.contentEl);
@@ -917,8 +930,13 @@
       byFile[file].forEach(function (e) {
         var rows = el("div", "diff-rows");
         e.diff.forEach(function (d) {
-          rows.appendChild(el("div", "diff-line " + (d.type === "+" ? "add" : d.type === "-" ? "del" : "same"),
-            (d.type === "+" ? "+ " : d.type === "-" ? "− " : "  ") + d.text));
+          var kind = d.type === "+" ? "add" : d.type === "-" ? "del" : "same";
+          var row = el("div", "diff-line " + kind);
+          /* 独立的 gutter 列。用 −(U+2212) 还是 -(ASCII) 取决于字体，
+             混用会让左侧色条宽度在两种符号下不一致。 */
+          row.appendChild(el("span", "diff-gut", d.type === "same" ? "" : d.type));
+          row.appendChild(el("span", "diff-txt", d.text));
+          rows.appendChild(row);
         });
         body.appendChild(rows);
       });

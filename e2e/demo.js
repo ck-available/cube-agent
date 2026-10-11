@@ -76,7 +76,7 @@
     {
       role: "assistant",
       content:
-        "抽取完成，测试已跑通。\n\n| 文件 | 变更 |\n|---|---|\n| `src/auth.ts` | 抽取 `verifyToken` + 更新 3 处调用 |\n| `src/auth.test.ts` | 新增 2 条用例 |\n\n> 校验逻辑现在有独立出口，后续换签名算法只改一处。",
+        "抽取完成，测试已跑通。核心改动：\n\n```ts\n// src/auth.ts\nexport function verifyToken(raw: string) {\n  /* 过期 token 直接判定为无效，\n     不再让下游拿到 payload 后自己判断 */\n  if (!raw) throw new Error('missing token');\n  return jwt.verify(raw, SECRET);\n}\n```\n\n| 文件 | 变更 |\n|---|---|\n| `src/auth.ts` | 抽取 `verifyToken` + 更新 3 处调用 |\n| `src/auth.test.ts` | 新增 2 条用例 |\n\n> 校验逻辑现在有独立出口，后续换签名算法只改一处。",
       ts: t
     }
   ];
