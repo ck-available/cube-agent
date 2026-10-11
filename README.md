@@ -65,21 +65,46 @@ CubeAgent 不只是一个套壳聊天窗口，而是一个**能真正动手的 A
 | `CubeAgent-x.x.x-win-x64-portable.exe` | 单文件便携版，双击即用，无需安装 |
 | `CubeAgent-x.x.x-win-x64-green.zip` | 绿色解压版，解压后双击 `CubeAgent.exe`，连临时目录都不用 |
 
-### 方式 B：不用 exe，起个本地服务用浏览器
+### 方式 B：完全不用 exe，起个本地服务用浏览器
 
-只要机器上有 **Node.js 18+**，一条命令：
+**这是唯一一种连 exe 都不需要的方式**，适合公司电脑禁用可执行文件、或不想过 SmartScreen 的场景。
+
+**第 1 步：把源码拿到本地**（二选一）
 
 ```bash
+git clone https://github.com/ck-available/cube-agent.git
+```
+
+或者直接在仓库页面点 **Code → Download ZIP**，解压到任意文件夹（这条不用装 git）。
+
+**第 2 步：起服务**
+
+机器上只要有 **Node.js 18+** 即可。**不需要 `npm install`** —— 本项目运行时依赖为空
+（`dependencies: {}`，`server/server.js` 与 `electron/runtime.js` 只用到 Node 内置模块），
+`npm install` 装的那两个包是 electron 打包工具，只在构建 exe 时才用得上。
+
+```bash
+cd cube-agent
 node server/server.js                    # 起服务并自动打开浏览器
 node server/server.js --port 7799        # 换端口
 node server/server.js --ws D:\my-project # 启动时直接指定项目目录
+```
+
+启动后会打印一个横幅，**必须从横幅给出的那个带令牌的地址进入**：
+
+```
+  CubeAgent v0.4.0 · 免安装模式
+  ─────────────────────────────────────────
+  地址    http://127.0.0.1:7788/?t=04481e36e60396d368f5200d08e06a4f
+  工作区  F:\WorkBuddy\my-project
+  停止    Ctrl + C
 ```
 
 浏览器打开后是**完整功能**，不是阉割版 —— 文件读写、命令执行、MCP 全部可用。
 因为它和桌面版共用同一份运行时实现（`electron/runtime.js`），能力完全等价，
 包括工作区安全边界（依然禁止 `../` 逃逸）。
 
-- 启动横幅里会打印一个**带随机令牌的地址**，必须从它给出的地址进入（令牌用于防止本机其它网页跨站调用你的文件系统）
+- 令牌用于防止本机其它网页跨站调用你的文件系统；不带令牌请求 `/api/*` 一律返回 **403**
 - 只监听 `127.0.0.1`，不对局域网暴露
 - `Ctrl + C` 停止服务
 
