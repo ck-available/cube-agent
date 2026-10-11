@@ -1,0 +1,72 @@
+name: Release
+
+# 推送 v* 标签时自动构建三平台安装包并上传到 GitHub Release
+# 使用方法：git tag v0.2.0 && git push origin v0.2.0
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      # Windows：单文件便携版 + 绿色解压版（都不需要管理员权限）
+      - name: Build Windows portable
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win portable --publish never
+
+      - name: Package green (解压即用) zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/CubeAgent-$($env:TAG_NAME)-win-x64-green.zip" -CompressionLevel Optimal
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+
+      - name: Build macOS dmg
+        if: runner.os == 'macOS'
+        run: npx electron-builder --mac dmg --publish never
+
+      - name: Build Linux AppImage
+        if: runner.os == 'Linux'
+        run: npx electron-builder --linux AppImage --publish never
+
+      - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage
+          generate_release_notes: true
+
+      - name: Upload artifacts (手动触发时)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cube-agent-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.dmg
+            dist/*.AppImage

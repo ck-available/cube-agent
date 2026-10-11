@@ -1,0 +1,72 @@
+{
+  "name": "cube-agent",
+  "version": "0.3.0",
+  "description": "CubeAgent - 免安装的开源 AI Agent 桌面客户端，支持 OpenAI 兼容 / Claude / Gemini / Ollama",
+  "main": "electron/main.js",
+  "author": "CubeAgent Contributors",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "web": "node server/server.js",
+    "e2e": "node e2e/run.js",
+    "e2e:deep": "node e2e/run-deep.js",
+    "e2e:server": "node e2e/server-suite.js",
+    "e2e:context": "node e2e/context-suite.js",
+    "e2e:memory": "node e2e/memory-suite.js",
+    "e2e:web": "electron e2e/web-suite.js",
+    "e2e:all": "node e2e/run-all.js",
+    "dist": "electron-builder --win portable",
+    "dist:all": "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cubeagent.desktop",
+    "productName": "CubeAgent",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**/*",
+      "electron/**/*",
+      "server/**/*",
+      "build/icon.png",
+      "e2e/driver.js",
+      "e2e/renderer-suite.js",
+      "e2e/deep-suite.js",
+      "package.json"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "CubeAgent-${version}-win-x64-portable.${ext}"
+    },
+    "portable": {
+      "artifactName": "CubeAgent-${version}-win-x64-portable.${ext}"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity",
+      "artifactName": "CubeAgent-${version}-mac-universal.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "Utility",
+      "artifactName": "CubeAgent-${version}-linux-x86_64.${ext}"
+    }
+  }
+}
