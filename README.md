@@ -1,5 +1,11 @@
 # ◆ CubeAgent
 
+[![Release](https://img.shields.io/github/v/release/ck-available/cube-agent?color=4c8dff&label=release)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/ck-available/cube-agent/total?color=4c8dff)](../../releases)
+[![License](https://img.shields.io/badge/license-MIT-3fb950)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-8a9099)]()
+[![Tests](https://img.shields.io/badge/tests-188%20passing-3fb950)]()
+
 > **免安装、开源、不需要管理员权限** 的 AI Agent 桌面客户端
 > 设计借鉴 OpenAI Codex CLI、DeepSeek Harness、Qoder、Hermes Agent、Claude Code
 

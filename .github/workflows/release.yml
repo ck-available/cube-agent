@@ -33,11 +33,16 @@ jobs:
         if: runner.os == 'Windows'
         run: npx electron-builder --win portable --publish never
 
+      # 名字里的版本号要跟 exe/dmg/AppImage 保持一致（都不带 v 前缀）。
+      # github.ref_name 是 "v0.4.0"，直接用会得到 CubeAgent-v0.4.0-...，
+      # 与 electron-builder 产出的 CubeAgent-0.4.0-... 对不齐，
+      # 同一页上两个 Windows 文件前缀不同会让用户困惑。
       - name: Package green (解压即用) zip
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/CubeAgent-$($env:TAG_NAME)-win-x64-green.zip" -CompressionLevel Optimal
+          $ver = $env:TAG_NAME -replace '^v', ''
+          Compress-Archive -Path "dist/win-unpacked/*" -DestinationPath "dist/CubeAgent-${ver}-win-x64-green.zip" -CompressionLevel Optimal
         env:
           TAG_NAME: ${{ github.ref_name }}
 
