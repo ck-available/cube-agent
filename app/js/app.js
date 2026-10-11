@@ -24,6 +24,13 @@
   }
   var SVGNS = "http://www.w3.org/2000/svg";
   function icon(name, cls) {
+    /* 拼错图标名会静默渲染成空白 —— use 指向不存在的 #i-xxx，浏览器不报错，
+       界面上就是一个"什么都没有"的按钮。这里显式告警，别让这种问题溜过去。 */
+    try {
+      if (!document.getElementById("i-" + name) && typeof console !== "undefined") {
+        console.warn("[cubeagent] 图标不存在：" + name);
+      }
+    } catch (e) { /* 查询失败不该影响渲染 */ }
     var svg = document.createElementNS(SVGNS, "svg");
     svg.setAttribute("class", "ic" + (cls ? " " + cls : ""));
     svg.setAttribute("aria-hidden", "true");
@@ -199,6 +206,8 @@
 
   function promptText(opts) {
     return new Promise(function (resolve) {
+      var settled = false;
+      var done = function (v) { if (settled) return; settled = true; resolve(v); };
       $("#prompt-title").textContent = opts.title || "输入";
       var input = $("#prompt-input"), ta = $("#prompt-textarea");
       input.classList.toggle("hidden", !!opts.multiline);
@@ -211,20 +220,41 @@
       $("#prompt-ok").onclick = function () {
         var v = field.value.trim();
         closeModal("#modal-prompt");
-        resolve(v || null);
+        done(v || null);
       };
+      /* 取消 / Esc / 点遮罩也要落定为 null，否则调用方的 await 永远悬着。
+         与 confirmBox 同一个坑，两个都要堵。 */
+      $("#modal-prompt").querySelectorAll("[data-close]").forEach(function (b) {
+        b.onclick = function () { done(null); };
+      });
+      var mo = new MutationObserver(function () {
+        if ($("#modal-prompt").classList.contains("hidden")) done(null);
+      });
+      mo.observe($("#modal-prompt"), { attributes: true, attributeFilter: ["class"] });
     });
   }
 
   function confirmBox(title, text) {
     return new Promise(function (resolve) {
+      var settled = false;
+      var done = function (v) { if (settled) return; settled = true; resolve(v); };
       $("#confirm-title").textContent = title;
       $("#confirm-text").textContent = text;
       openModal("#modal-confirm");
       $("#confirm-ok").onclick = function () {
         closeModal("#modal-confirm");
-        resolve(true);
+        done(true);
       };
+      /* 取消 / Esc / 点遮罩都必须 resolve(false)。
+         之前只挂在"确定"上，用户点取消时 Promise 永远悬着 ——
+         调用方的 await 全部卡死，且每点一次泄漏一个 Promise。 */
+      $("#modal-confirm").querySelectorAll("[data-close]").forEach(function (b) {
+        b.onclick = function () { done(false); };
+      });
+      var mo = new MutationObserver(function () {
+        if ($("#modal-confirm").classList.contains("hidden")) done(false);
+      });
+      mo.observe($("#modal-confirm"), { attributes: true, attributeFilter: ["class"] });
     });
   }
 
@@ -306,7 +336,14 @@
     var ic = el("span", "session-icon");
     if (mask && mask.emoji) ic.textContent = mask.emoji; else ic.appendChild(icon("cube", "ic-sm"));
     item.appendChild(ic);
-    item.appendChild(el("span", "session-title", s.title));
+    /* 分支会话加个小标记，一眼能看出它是从哪条路分出来的 */
+    var titleEl = el("span", "session-title", s.title);
+    if (s.forkedFrom) {
+      var tag = el("span", "session-branch-tag", "分支");
+      tag.title = "从「" + s.forkedFrom.title + "」的第 " + s.forkedFrom.at + " 条消息处分出";
+      titleEl.appendChild(tag);
+    }
+    item.appendChild(titleEl);
     item.appendChild(el("span", "session-time", relTime(s.updatedAt)));
     var del = el("button", "session-del");
     del.title = "删除任务";
@@ -319,6 +356,28 @@
       });
     };
     item.appendChild(del);
+    /* 侧栏直接分叉：不需要先切到该会话 */
+    if (s.messages && s.messages.length) {
+      var brk = el("button", "session-del session-branch");
+      brk.title = "分支出新会话（原会话不变）";
+      brk.setAttribute("aria-label", "分支出新会话");
+      brk.appendChild(icon("branch", "ic-sm"));
+      brk.onclick = function (e) {
+        e.stopPropagation();
+        branchSession(s.id);
+      };
+      item.appendChild(brk);
+    }
+    /* 重命名按钮：只靠双击的话没人会发现，hover 时直接给出入口 */
+    var ren = el("button", "session-del session-rename");
+    ren.title = "重命名任务";
+    ren.setAttribute("aria-label", "重命名任务");
+    ren.appendChild(icon("pencil", "ic-sm"));
+    ren.onclick = function (e) {
+      e.stopPropagation();
+      renameSession(s.id);
+    };
+    item.appendChild(ren);
     item.onclick = function () { selectSession(s.id); };
     item.ondblclick = function () { renameSession(s.id); };
     return item;
@@ -433,6 +492,15 @@
       regenerateFrom(idx);
     };
     actions.appendChild(re);
+    /* 从这条消息分叉：原会话原封不动，新会话从这里继续。
+       对应 Claude Code 的 /branch、Codex 的 fork —— 想试另一条路时不必怕弄坏现在这条。 */
+    var br = el("button", null, "从这里分支");
+    br.title = "复制到这条消息为止，开启一个新会话，原会话保持不变";
+    br.onclick = function (e) {
+      e.stopPropagation();
+      branchFrom(idx);
+    };
+    actions.appendChild(br);
     var tm = el("span", "msg-time", clockOf(m.ts));
     if (tm.textContent) actions.appendChild(tm);
     body.appendChild(actions);
@@ -459,6 +527,15 @@
       editFrom(idx);
     };
     actions.appendChild(ed);
+    /* 分支：从这里换条路走，原对话保留。
+       与「编辑」的区别：编辑会丢后续，分支不会 —— 不确定时用分支更安全。 */
+    var br = el("button", null, "从这里分支");
+    br.title = "复制到这条消息为止，开启新会话，原对话保持不变";
+    br.onclick = function (e) {
+      e.stopPropagation();
+      branchFrom(idx);
+    };
+    actions.appendChild(br);
     var tm = el("span", "msg-time", clockOf(m.ts));
     if (tm.textContent) actions.appendChild(tm);
     body.appendChild(actions);
@@ -536,6 +613,46 @@
     renderDetail();
     renderEditTip(session._editBackup.dropped);
     await submit(text);
+  }
+
+  /* 会话分支：从第 idx 条消息处复制出一个新会话，原会话完全不动。
+   * Claude Code 的 /branch 与 Codex 的 fork 会话是同一个东西——
+   * "想换个思路试试，但不想弄坏已经走通的那条路"。
+   * 与 editFrom 的区别：editFrom 会丢弃后续对话（破坏性），这里是复制（安全）。 */
+  async function branchFrom(idx) {
+    if (running) { toast("正在运行，请先停止或等本轮结束"); return; }
+    var src = Store.getSession(S.activeSessionId);
+    if (!src) return;
+    if (!src.messages.length) { toast("当前会话还没有内容，无法分支"); return; }
+    if (idx == null || idx < 0 || idx >= src.messages.length) idx = src.messages.length - 1;
+
+    var cutLabel = src.messages.slice(0, idx + 1).length;
+    var forked = Store.forkSession(src.id, idx);
+    if (!forked) { toast("分支失败"); return; }
+
+    Store.pushTrajectory(forked, "system", "创建分支");
+    Store.save();
+    renderSessions($("#search-input").value);
+    renderMain();
+    renderDetail();
+    renderContext();
+    toast("已从第 " + cutLabel + " 条消息分支出新会话，原会话保持不变");
+    $("#input").focus();
+  }
+
+  /* 整段会话分支（不指定消息位置），从侧栏会话菜单触发 */
+  async function branchSession(id) {
+    if (running) { toast("正在运行，请先停止或等本轮结束"); return; }
+    var src = Store.getSession(id || S.activeSessionId);
+    if (!src || !src.messages.length) { toast("该会话还没有内容，无法分支"); return; }
+    var forked = Store.forkSession(src.id, src.messages.length - 1);
+    if (!forked) { toast("分支失败"); return; }
+    Store.save();
+    renderSessions($("#search-input").value);
+    renderMain();
+    renderDetail();
+    renderContext();
+    toast("已分支出「" + forked.title + "」");
   }
 
   function toolRow(m) {
@@ -1019,7 +1136,10 @@
 
   function computeContext(session) {
     var s = session || Store.getSession(S.activeSessionId);
+    // 全新用户还没建任何会话时 activeSessionId 为空，这里必须兜住：
+    // 否则欢迎页渲染就会抛 "Cannot read properties of undefined (reading 'messages')"
     var msgs = liveMessages(s);
+    var sessionMsgs = (s && Array.isArray(s.messages)) ? s.messages : [];
     var n = S.settings.contextCount;
     var usable = msgs.filter(function (m) { return !m.error && (m.role === "user" || m.role === "assistant" || m.role === "tool"); });
     if (usable.length > n) usable = usable.slice(usable.length - n);
@@ -1029,7 +1149,7 @@
           platform: hasLocal() ? window.cube.platform : "browser",
           workspace: S.agent.workspace,
           projectRules: S.agent.projectRules,
-          constraints: CubeContext.extractConstraints(s.messages),
+          constraints: CubeContext.extractConstraints(sessionMsgs),
           memories: recalledMemory(s),
           memoryLabels: memoryLabels()
         })
@@ -1295,6 +1415,7 @@
 
   var SLASH = [
     { cmd: "/clear", desc: "清空当前会话的记录与计划" },
+    { cmd: "/branch", desc: "分支出一个新会话（想换思路但保留原对话时用）" },
     { cmd: "/model", desc: "打开模型选择器" },
     { cmd: "/stop", desc: "停止当前运行（排队消息仍会继续发送）" },
     { cmd: "/queue", desc: "查看/清空排队等待发送的消息" },
@@ -1417,6 +1538,10 @@
         if (session) { session.messages = []; session.todo = []; session.trajectory = []; session._editBackup = null; Store.save(); }
         sendQueue = [];
         renderMain(); renderDetail(); renderQueue(); renderEditTip(0); toast("已清空当前会话");
+        return true;
+      case "/branch":
+        if (!session || !session.messages.length) { toast("当前会话还没有内容，无法分支"); return true; }
+        await branchFrom(session.messages.length - 1);
         return true;
       case "/model":
         $("#model-picker-btn").click();
@@ -2219,6 +2344,7 @@
     var cmds = [
       { label: "新任务", hint: "Ctrl N", run: function () { newTask(); } },
       { label: "选择工作区 / 项目目录", hint: "", run: pickWorkspace },
+      { label: "分支出新会话（原会话不变）", hint: "/branch", run: function () { branchSession(); } },
       { label: "切换运行模式（聊天 / Agent）", hint: "", run: function () { $("#mode-select").focus(); } },
       { label: "切换权限档位", hint: "Shift Tab", run: function () { $("#perm-select").focus(); } },
       { label: "查看上下文用量明细", hint: "/context", run: function () { runSlash("/context"); } },
@@ -2501,7 +2627,7 @@
 
     var about = el("div", "hint");
     about.style.marginTop = "18px";
-    about.textContent = "CubeAgent v0.3.0 · MIT 开源 · 所有数据只保存在本机";
+    about.textContent = "CubeAgent v0.4.0 · MIT 开源 · 所有数据只保存在本机";
     box.appendChild(about);
   }
 
@@ -2579,15 +2705,25 @@
     box.appendChild(sum);
 
     var addBtn = el("button", "btn-primary", "＋ 手动添加");
-    addBtn.onclick = function () {
-      var t = window.prompt("记忆内容（写成一条独立结论，别贴整段聊天）",
-        "例如：这个项目统一用 pnpm，不要用 npm");
+    addBtn.onclick = async function () {
+      /* 用页面内表单而不是 window.prompt：
+         原生弹窗在 Electron 里样式陈旧、阻塞渲染，与整体 UI 割裂，
+         而且没法做类型选择与输入校验。 */
+      var t = await promptText({
+        title: "添加长期记忆",
+        placeholder: "写成一条独立结论，别贴整段聊天。例如：这个项目统一用 pnpm，不要用 npm",
+        value: ""
+      });
       if (!t) return;
-      var type = window.prompt("类型：" +
-        Object.keys(CubeMemory.TYPES).map(function (k) {
-          return k + "（" + CubeMemory.TYPES[k].label + "）";
-        }).join(" / "), "project");
-      if (!type || !CubeMemory.TYPES[type]) type = "project";
+      var typeKeys = Object.keys(CubeMemory.TYPES);
+      var hint = typeKeys.map(function (k) { return k + "（" + CubeMemory.TYPES[k].label + "）"; }).join("  ");
+      var type = await promptText({
+        title: "这条记忆的类型：" + hint,
+        placeholder: "输入类型代号，回车用默认的 project",
+        value: "project"
+      });
+      type = String(type || "project").trim();
+      if (!CubeMemory.TYPES[type]) type = "project";
       var r = CubeMemory.remember({ type: type, text: t, workspace: S.agent.workspace, source: "手动添加" });
       toast(r ? "已记住" : "内容太短或太长（需 4~300 字）");
       renderMemorySettings(box);
@@ -2597,8 +2733,9 @@
     acts.appendChild(addBtn);
 
     var clr = el("button", "btn-outline", "清空当前项目的记忆");
-    clr.onclick = function () {
-      if (!confirm("清空当前工作区的全部长期记忆？个人偏好不受影响。")) return;
+    clr.onclick = async function () {
+      var yes = await confirmBox("清空记忆", "清空当前工作区的全部长期记忆？个人偏好不受影响。");
+      if (!yes) return;
       CubeMemory.clearProject(S.agent.workspace);
       toast("已清空");
       renderMemorySettings(box);
@@ -2709,8 +2846,10 @@
             ed.onclick = function () { skillEditor(sk); };
             acts.appendChild(ed);
             var del = el("button", "btn-ghost", "删除");
-            del.onclick = function () {
-              if (!confirm("删除技能「" + sk.name + "」？")) return;
+            del.onclick = async function () {
+              // 同样走页面内确认框，原生 confirm 与整体 UI 不一致
+              var yes = await confirmBox("删除技能", "删除技能「" + sk.name + "」？此操作不可撤销。");
+              if (!yes) return;
               api().skillRemove(sk.name).then(function (r) {
                 if (!r || !r.ok) return toast(r && r.error ? r.error : "删除失败");
                 toast("已删除"); renderSkillsSettings(box);
@@ -3277,12 +3416,17 @@
     enqueue: enqueue,
     editFrom: editFrom,
     regenerateFrom: regenerateFrom,
+    branchFrom: branchFrom,
+    branchSession: branchSession,
     copyText: copyText,
     setWorkspace: setWorkspace,
     rollback: rollbackFile,
     openSettings: openSettings,
     stop: stopRun,
     slash: runSlash,
+    // 基础弹窗：设置页的记忆/技能都用它们，必须可测
+    confirmBox: confirmBox,
+    promptText: promptText,
     lastSystem: function () { return lastSystem; },
     contextStat: function () { return computeContext(null); },
     openPalette: openPalette,

@@ -8,5 +8,5 @@ CubeAgent-data/
 app/js/secret.local.js
 e2e/_artifacts/
 
-# 被 microcompaction 折叠的���大内容归档（运行时生成，不应进版本库）
+# 被 microcompaction 折叠的超大内容归档（运行时生成，不应进版本库）
 .cubeagent/toolbox/

@@ -222,6 +222,52 @@
       this.save();
     },
 
+    /* 从第 idx 条消息处分叉一个新会话（Claude Code /branch、Codex fork 的等价物）。
+     * 用途：想换个思路试，但不想毁掉已经走通的那条路。
+     * idx 传 -1 表示从当前末尾分叉；不传表示分叉整个会话。
+     * 关键约束：必须深拷贝。原会话与分叉会话各自独立演进，
+     * 否则在分叉里改动消息会污染原会话 —— 这是最容易写错的地方。 */
+    forkSession: function (id, idx, label) {
+      var src = this.getSession(id);
+      if (!src) return null;
+      var cut = (idx == null || idx < 0) ? src.messages.length : Math.min(idx + 1, src.messages.length);
+
+      var forked = {
+        id: this.uid(),
+        title: (label ? String(label).slice(0, 40) : src.title) + "（分支）",
+        maskId: src.maskId,
+        workspace: src.workspace,
+        messages: [],
+        summary: src.summary,
+        compactCount: src.compactCount,
+        summaryHistory: (src.summaryHistory || []).slice(),
+        todo: JSON.parse(JSON.stringify(src.todo || [])),
+        // 快照要各自独立：分叉里继续改文件时不能覆盖原会话的回滚点
+        checkpoints: JSON.parse(JSON.stringify(src.checkpoints || {})),
+        trajectory: (src.trajectory || []).slice(),
+        stats: JSON.parse(JSON.stringify(src.stats || {})),
+        forkedFrom: { id: src.id, title: src.title, at: cut, ts: Date.now() },
+        parentId: src.id,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      // 逐条浅拷消息即可（消息本身不会被整体替换），但要断开 microStored 的共享引用
+      forked.messages = src.messages.slice(0, cut).map(function (m) {
+        var c = Object.assign({}, m);
+        return c;
+      });
+      forked.trajectory = forked.trajectory.concat([{
+        ts: Date.now(), type: "system",
+        label: "从「" + src.title + "」分叉（第 " + cut + " 条消息处）",
+        detail: ""
+      }]);
+
+      this.state.sessions.unshift(forked);
+      this.state.activeSessionId = forked.id;
+      this.save();
+      return forked;
+    },
+
     exportAll: function () {
       return JSON.stringify(this.state, null, 2);
     },

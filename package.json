@@ -1,6 +1,6 @@
 {
   "name": "cube-agent",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CubeAgent - 免安装的开源 AI Agent 桌面客户端，支持 OpenAI 兼容 / Claude / Gemini / Ollama",
   "main": "electron/main.js",
   "author": "CubeAgent Contributors",
@@ -16,6 +16,8 @@
     "e2e:memory": "node e2e/memory-suite.js",
     "e2e:web": "electron e2e/web-suite.js",
     "e2e:all": "node e2e/run-all.js",
+    "e2e:live": "node e2e/live.js",
+    "e2e:live:full": "node e2e/live.js full",
     "dist": "electron-builder --win portable",
     "dist:all": "electron-builder -mwl"
   },
@@ -38,6 +40,9 @@
       "e2e/driver.js",
       "e2e/renderer-suite.js",
       "e2e/deep-suite.js",
+      "e2e/live-driver.js",
+      "e2e/live-suite-core.js",
+      "e2e/live-suite-full.js",
       "package.json"
     ],
     "asar": true,
@@ -50,7 +55,9 @@
       "target": [
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "artifactName": "CubeAgent-${version}-win-x64-portable.${ext}"
@@ -59,12 +66,16 @@
       "artifactName": "CubeAgent-${version}-win-x64-portable.${ext}"
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.productivity",
       "artifactName": "CubeAgent-${version}-mac-universal.${ext}"
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Utility",
       "artifactName": "CubeAgent-${version}-linux-x86_64.${ext}"
     }

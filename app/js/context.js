@@ -95,7 +95,13 @@
 
     var chipTokens = 0;
     chips.forEach(function (c) {
-      if (c && c.tokens == null) c.tokens = estimateTokens(c.text || c.path || "");
+      /* chips 两种形态都要认：@ 引用的文件是纯字符串路径，
+         而面板里手动加的可能是 {text, path} 对象。
+         之前只按对象处理，用户一 @ 文件就抛
+         "Cannot create property 'tokens' on string"，上下文条直接不更新。 */
+      if (typeof c === "string") { chipTokens += estimateTokens(c); return; }
+      if (!c) return;
+      if (c.tokens == null) c.tokens = estimateTokens(c.text || c.path || "");
       chipTokens += c.tokens || 0;
     });
 

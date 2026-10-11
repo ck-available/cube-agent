@@ -261,6 +261,37 @@
         "末段「" + lastSeg.slice(0, 30) + "」");
     })();
 
+    /* ---------- 3c. 两个真实崩溃的回归 ---------- */
+    // ① 全新用户还没建会话时 activeSessionId 为空，renderContext 曾直接抛
+    //    "Cannot read properties of undefined (reading 'messages')"，欢迎页都打不开
+    (function () {
+      const keepId = S.activeSessionId;
+      const keepSess = S.sessions;
+      S.sessions = [];
+      S.activeSessionId = null;
+      let err = "";
+      try { CubeApp.contextStat(); } catch (e) { err = e.message; }
+      S.sessions = keepSess;
+      S.activeSessionId = keepId;
+      ok("上下文：没有任何会话时不崩溃（全新用户首屏）", err === "", err || "正常返回");
+    })();
+
+    // ② @ 引用的文件是纯字符串路径，analyze 之前把它当对象赋 .tokens 直接抛
+    //    "Cannot create property 'tokens' on string 'README.md'"
+    (function () {
+      let err = "";
+      let stat = null;
+      try {
+        stat = CubeContext.analyze({
+          system: "sys", messages: [{ role: "user", content: "hi" }],
+          tools: [], chips: ["README.md", { text: "src/calc.js" }],
+          model: S.settings.activeModel, maxTokens: 4096
+        });
+      } catch (e) { err = e.message; }
+      ok("上下文：@ 引用（字符串路径）与对象芯片混排都能统计", err === "" && stat && stat.total > 0,
+        err || "total=" + (stat && stat.total) + " tokens");
+    })();
+
     /* ---------- 4. 沙箱 ---------- */    const outside = await cube.read("F:/WorkBuddy/cube-agent/e2e/outside.txt");
     ok("安全：越界读取被拒绝", !!(outside && outside.__error), (outside && outside.__error) || "竟然读成功了");
     const evil = await cube.write("F:/WorkBuddy/cube-agent/e2e/_artifacts/evil.txt", "x");
@@ -394,6 +425,91 @@
 
     /* ---------- 11. 斜杠命令与 Markdown ---------- */
     ok("斜杠命令 /help 可执行", await CubeApp.slash("/help") === true);
+
+    /* ---------- 11a. 基础弹窗 + 会话分支 ---------- */
+    // confirmBox 之前只把 resolve 挂在"确定"上，用户点取消/Esc 时 Promise 永远悬着，
+    // 调用方的 await 全部卡死。这里验证三条路径都能落定。
+    const cbOpen = await (async function () {
+      const p = CubeApp.confirmBox("测试确认", "随便点什么");
+      await sleep(120);
+      const opened = !$("#modal-confirm").classList.contains("hidden");
+      $("#confirm-ok").click();
+      const v = await Promise.race([p, sleep(1500).then(() => "TIMEOUT")]);
+      return { opened, v };
+    })();
+    ok("弹窗：确认框点确定返回 true", cbOpen.opened && cbOpen.v === true,
+      "打开=" + cbOpen.opened + " · 返回 " + JSON.stringify(cbOpen.v));
+
+    const cbCancel = await (async function () {
+      const p = CubeApp.confirmBox("测试确认", "点取消");
+      await sleep(120);
+      const cancelBtn = $$("#modal-confirm [data-close]")[0];
+      if (cancelBtn) cancelBtn.click();
+      return Promise.race([p, sleep(1500).then(() => "TIMEOUT")]);
+    })();
+    ok("弹窗：确认框点取消能落定（此前 Promise 悬死，调用方 await 卡死）",
+      cbCancel === false, "返回 " + JSON.stringify(cbCancel));
+
+    const cbEsc = await (async function () {
+      const p = CubeApp.confirmBox("测试确认", "按 Esc");
+      await sleep(120);
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      return Promise.race([p, sleep(1500).then(() => "TIMEOUT")]);
+    })();
+    ok("弹窗：确认框按 Esc 也能落定", cbEsc === false, "返回 " + JSON.stringify(cbEsc));
+
+    const pt = await (async function () {
+      const p = CubeApp.promptText({ title: "测试输入", placeholder: "ph" });
+      await sleep(120);
+      $("#prompt-input").value = "  输入的内容  ";
+      $("#prompt-ok").click();
+      return Promise.race([p, sleep(1500).then(() => "TIMEOUT")]);
+    })();
+    ok("弹窗：输入框返回去空白后的内容", pt === "输入的内容", "返回 " + JSON.stringify(pt));
+
+    /* ---------- 11b. 会话分支（对应 Claude Code /branch、Codex fork）---------- */
+    const bkSrc = Store.createSession();
+    bkSrc.title = "分支源";
+    bkSrc.messages = [
+      { role: "user", content: "A", ts: Date.now() },
+      { role: "assistant", content: "B", ts: Date.now() },
+      { role: "user", content: "C", ts: Date.now() },
+      { role: "assistant", content: "D", ts: Date.now() }
+    ];
+    Store.save();
+    const bkId = bkSrc.id;
+    const bkN = S.sessions.length;
+    await CubeApp.branchFrom(1);
+    await sleep(300);
+    const bkFork = Store.getSession(S.activeSessionId);
+    ok("分支：分支出新会话且只复制到分叉点",
+      !!bkFork && bkFork.id !== bkId && bkFork.messages.length === 2 && S.sessions.length === bkN + 1,
+      "源 4 条 → 分支 " + (bkFork ? bkFork.messages.length : "?") + " 条 · 会话 " + bkN + "→" + S.sessions.length);
+    ok("分支：记录了来源会话", !!bkFork && !!bkFork.forkedFrom && bkFork.forkedFrom.id === bkId,
+      bkFork && bkFork.forkedFrom ? "来自「" + bkFork.forkedFrom.title + "」" : "无");
+    // 深拷贝：分支里的改动绝不能污染源会话
+    if (bkFork) {
+      bkFork.messages.push({ role: "user", content: "分支新增", ts: Date.now() });
+      bkFork.checkpoints = { "fork-only.js": "y" };
+      Store.save();
+    }
+    const bkBack = Store.getSession(bkId);
+    ok("分支：改动互不污染（源会话保持 4 条且无分支的快照）",
+      bkBack.messages.length === 4 && !bkBack.checkpoints["fork-only.js"],
+      "源 " + bkBack.messages.length + " 条 · 快照键 " + Object.keys(bkBack.checkpoints || {}).length + " 个");
+    ok("分支：侧栏显示分支标记与分叉按钮",
+      $$("#session-list .session-branch-tag").length >= 1 && $$("#session-list .session-branch").length >= 1,
+      "标记 " + $$("#session-list .session-branch-tag").length + " 个 · 按钮 "
+      + $$("#session-list .session-branch").length + " 个");
+    ok("分支：会话行有重命名按钮（不只靠双击）",
+      $$("#session-list .session-rename").length >= 1,
+      "重命名按钮 " + $$("#session-list .session-rename").length + " 个");
+    // 图标名写错会静默渲染成空白（use 指向不存在的 #i-xxx，浏览器不报错）
+    const sideUses = $$("#session-list .session-rename use, #session-list .session-branch use")
+      .map((u) => (u.getAttribute("href") || "").replace("#", ""));
+    ok("界面：侧栏按钮的图标都指向真实存在的 symbol（写错名字不会静默空白）",
+      sideUses.length > 0 && sideUses.every((h) => !!document.getElementById(h)),
+      "引用 " + sideUses.join("/") + " · 全部存在=" + sideUses.every((h) => !!document.getElementById(h)));
     const md = Markdown.render("# 标题\n\n```js\nlet a = 1;\n```\n\n| 列1 | 列2 |\n|---|---|\n| A | B |\n\n> 引用\n");
     ok("Markdown：代码块渲染", md.indexOf("<pre") >= 0 || md.indexOf("<code") >= 0);
     ok("Markdown：表格渲染", md.indexOf("<table") >= 0);

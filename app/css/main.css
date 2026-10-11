@@ -454,6 +454,19 @@ select { cursor: pointer; }
 }
 .session-item:hover .session-del { opacity: 1; }
 .session-item .session-del:hover { color: var(--err); background: var(--err-lo); }
+/* 分叉按钮在删除按钮左边，hover 时一起出现 */
+.session-item .session-branch {
+  margin-right: 18px;
+}
+.session-item .session-branch:hover { color: var(--accent); background: var(--hover); }
+/* 分支会话标记 */
+.session-branch-tag {
+  display: inline-block; margin-left: 6px; padding: 0 5px;
+  font-size: var(--fs-2xs); line-height: 15px; border-radius: var(--r-xs);
+  color: var(--accent); background: var(--accent-lo);
+  border: 1px solid var(--accent-brd);
+  vertical-align: 1px;
+}
 .session-empty {
   color: var(--fg-3); text-align: center;
   padding: var(--sp-9) var(--sp-3); font-size: var(--fs-2xs);

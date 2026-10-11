@@ -65,7 +65,13 @@ app.whenReady().then(() => {
   }));
 
   createWindow();
-  if (process.env.CUBEAGENT_E2E) {
+  if (process.env.CUBEAGENT_LIVE) {
+    // 实况测试：窗口可见，逐步截图，用户能亲眼看到测试过程
+    try { require("../e2e/live-driver")(mainWindow, app); } catch (e) {
+      console.error("实况驱动加载失败", e);
+      app.quit(1);
+    }
+  } else if (process.env.CUBEAGENT_E2E) {
     // 无头端到端测试：由 e2e/driver.js 驱动真实界面与真实模型
     try { require("../e2e/driver")(mainWindow, app); } catch (e) {
       console.error("E2E 驱动加载失败", e);
@@ -84,7 +90,9 @@ function createWindow() {
     backgroundColor: "#0a0c10",
     title: "CubeAgent",
     // E2E 与截图模式下不显示窗口（离屏渲染，仍可 capturePage）
-    show: !process.env.CUBEAGENT_E2E && !process.env.CUBEAGENT_SHOT,
+    // 实况模式要显示出来 —— 用户要求亲眼看到测试过程
+    show: (!!process.env.CUBEAGENT_LIVE)
+      || (!process.env.CUBEAGENT_E2E && !process.env.CUBEAGENT_SHOT),
     icon: path.join(__dirname, "../build/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
