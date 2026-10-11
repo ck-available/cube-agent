@@ -6,6 +6,24 @@
   "author": "CubeAgent Contributors",
   "license": "MIT",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ck-available/cube-agent.git"
+  },
+  "homepage": "https://github.com/ck-available/cube-agent#readme",
+  "bugs": {
+    "url": "https://github.com/ck-available/cube-agent/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "desktop",
+    "electron",
+    "coding-agent",
+    "openai",
+    "claude",
+    "gemini",
+    "ollama"
+  ],
   "scripts": {
     "start": "electron .",
     "web": "node server/server.js",
